@@ -10,11 +10,23 @@ hole_image = pygame.image.load("assets/hole.png")
 hole_image = pygame.transform.scale(hole_image, (100, 100))
 
 pygame.init()
+pygame.mixer.init()
+
+collision_sound = pygame.mixer.Sound('collision_sound.wav')
+pot_sound = pygame.mixer.Sound('pot_sound.wav')
+
 screen_width = 1600
 screen_height = 900
 screen = pygame.display.set_mode((screen_width, screen_height))
 clock = pygame.time.Clock()
 running = True
+
+# Define game states
+START_SCREEN = 0
+PLAYING = 1
+game_state = START_SCREEN
+
+play_button = RetryButton(screen_width // 2 - 50, screen_height // 2 - 40, 100, 80, "assets/play.jpg")
 
 pos = (800, 700)
 hole_pos = {
@@ -27,12 +39,16 @@ def check_collision(ball_rect, obstacle_rect, collision_tolerance):
     if ball_rect.colliderect(obstacle_rect):
         if abs(obstacle_rect.top - ball_rect.bottom) < collision_tolerance and ball.dir[1] > 0:
             ball.dir[1] *= -1
+            collision_sound.play()
         if abs(obstacle_rect.bottom - ball_rect.top) < collision_tolerance  and ball.dir[1] < 0:
             ball.dir[1] *= -1
+            collision_sound.play()
         if abs(obstacle_rect.right - ball_rect.left) < collision_tolerance and ball.dir[0] < 0:
             ball.dir[0] *= -1
+            collision_sound.play()
         if abs(obstacle_rect.left - ball_rect.right) < collision_tolerance and ball.dir[0] > 0:
             ball.dir[0] *= -1
+            collision_sound.play()
 
 isBallMoving = False
 shouldSetDirection = False
@@ -66,6 +82,8 @@ while running:
                     ball = Ball(*pos)
                     isBallMoving = False
                     shouldSetDirection = False
+            elif game_state == START_SCREEN and play_button.rect.collidepoint(event.pos):
+                game_state = PLAYING
             else:
                 shouldSetDirection = True
 
@@ -73,50 +91,60 @@ while running:
     # fill the screen with a color to wipe away anything from last frame
     screen.fill((105,171,81))
 
-    ball_rect = ball.ball   
-    pot_tolerance = 50
-    hole_rect = hole.rect
-    screen.blit(hole_image, hole.rect)
+    if game_state == PLAYING:
+        ball_rect = ball.ball   
+        pot_tolerance = 50
+        hole_rect = hole.rect
+        screen.blit(hole_image, hole.rect)
 
-    screen_rect = screen.get_rect()
+        screen_rect = screen.get_rect()
+        
+        if ball_rect.right >= screen_width or ball_rect.left <= 0:
+            ball.dir[0] *= -1
+            collision_sound.play()
+        if ball_rect.bottom >= screen_height or ball_rect.top <= 0:
+            ball.dir[1] *= -1
+            collision_sound.play()
+
+        if abs(ball_rect.x - hole_rect.x) < 50 and abs(ball_rect.y - hole_rect.y) < 50:
+            pot_sound.play()
+            isBallMoving = False
+            if level != max_level:
+                level += 1
+                ball = Ball(*pos)
+            
+        else:
+            screen.blit(ball_image, ball.ball)
+
+        for obstacle in obstaclesList:
+            pygame.draw.rect(screen, obstacle_color, obstacle.image)
+
+        font = pygame.font.SysFont("Arial", 36)
+        txtsurf = font.render(f'Level: {level}', True, 'black')
+        screen.blit(txtsurf,(200 - txtsurf.get_width() // 2, 150 - txtsurf.get_height() // 2))
     
-    if ball_rect.right >= screen_width or ball_rect.left <= 0:
-        ball.dir[0] *= -1
-    if ball_rect.bottom >= screen_height or ball_rect.top <= 0:
-        ball.dir[1] *= -1
+        if isBallMoving:
+            if ball.speed > 0:
+                ball.update()
 
+        if shouldSetDirection:
+            ball.setSpeed()
+            ball.setDirection()
 
-    if abs(ball_rect.x - hole_rect.x) < 50 and abs(ball_rect.y - hole_rect.y) < 50:
-        isBallMoving = False
-        if level != max_level:
-            level += 1
-            ball = Ball(*pos)
-    else:
-        screen.blit(ball_image, ball.ball)
+        for obstacle in obstaclesList:
+            obstacle_rect = obstacle.rect
+            check_collision(ball_rect, obstacle_rect, 50)
 
-    for obstacle in obstaclesList:
-        pygame.draw.rect(screen, obstacle_color, obstacle.image)
+        if not isBallMoving or ball.speed <= 0:
+            retry_button.draw(screen)
 
-    font = pygame.font.SysFont("Arial", 36)
-    txtsurf = font.render(f'Level: {level}', True, 'black')
-    screen.blit(txtsurf,(200 - txtsurf.get_width() // 2, 150 - txtsurf.get_height() // 2))
- 
-    if isBallMoving:
-        if ball.speed > 0:
-            ball.update()
-
-    if shouldSetDirection:
-        ball.setSpeed()
-        ball.setDirection()
-
-    for obstacle in obstaclesList:
-        obstacle_rect = obstacle.rect
-        check_collision(ball_rect, obstacle_rect, 50)
-
-    if not isBallMoving or ball.speed <= 0:
-        retry_button.draw(screen)
-
-        # score += 1
+    elif game_state == START_SCREEN:
+        # Draw the start screen
+        screen.fill((105, 171, 81))
+        font = pygame.font.SysFont("Arial", 72)
+        title_text = font.render("Pot it", True, 'black')
+        screen.blit(title_text, (screen_width // 2 - title_text.get_width() // 2, 200))
+        play_button.draw(screen)
 
     # if int(ball.pos[1]) == 200 and isBallMoving:
     #     print("Pot")
